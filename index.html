@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>A small introduction to three.js webgl [1]</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link rel="stylesheet" href="css/basic.css">
+
+	<script src="three.js"></script>
+	<script src="js/Detector.js"></script>
+	<script src="js/OrbitControls.js"></script>
+	<script type="text/javascript">
+
+		// Checks that your browser supports WebGL. 
+		if (!Detector.webgl) Detector.addGetWebGLMessage();
+
+		var renderer = null;
+		var solarSystemScene = null;
+		var camera = null;
+		var controls = null;
+
+		var earth     = null;
+		var earthGroup = new THREE.Group();
+		var moon      = null;
+		var moonGroup = new THREE.Group();
+		var sun      = null;
+		var sunGroup = new THREE.Group();
+		var mars      = null;
+		var marsGroup = new THREE.Group();
+		var venus      = null;
+		var venusGroup = new THREE.Group();
+		var mercure      = null;
+		var mercureGroup = new THREE.Group();
+		var curTime = Date.now();
+		var cameraAngle = 0;
+
+		// This function is called whenever the document is loaded
+		function init() {
+			// Get display canvas
+			var canvas = document.getElementById("webglcanvas");
+			console.log(canvas);
+
+			// Create the Three.js renderer and attach it to our canvas
+			renderer = new THREE.WebGLRenderer({
+				canvas: canvas,
+				antialias: true
+			});
+			// Set the viewport size
+			renderer.setSize(canvas.width, canvas.height);
+
+			// Ajout d'ombres
+			renderer.shadowMap.enabled = true;
+			// rendu coûteux mais plus joli (default: THREE.PCFShadowMap)
+			renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+
+			// Create a new Three.js scene
+			solarSystemScene = new THREE.Scene();
+			// Add  a camera so we can view the scene
+			camera = new THREE.PerspectiveCamera(45, canvas.width / canvas.height, 1, 4000);
+			controls = new THREE.OrbitControls( camera, renderer.domElement );
+			//controls.addEventListener( 'change', render ); // call this only in static scenes (i.e., if there is no animation loop)
+			controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+			controls.dampingFactor = 0.25;
+			controls.screenSpacePanning = false;
+			controls.minDistance = 2;
+			controls.maxDistance = 20;
+			
+			// Create a texture-mapped earth and add it to the scene
+			// First, create the texture map
+			var earthMapUrl = "images/earth_atmos_2048.jpg";
+			var moonMapUrl = "images/moon_1024.jpg";
+			var sunMapUrl = "images/sun.jpg";
+			var marsMapUrl = "images/mars_map.jpg";
+			var venusMapUrl = "images/venus_map.jpg";
+			var mercureMapUrl = "images/mercure_map.jpg";
+
+			var earthMap = new THREE.TextureLoader().load(earthMapUrl);
+			var moonMap = new THREE.TextureLoader().load(moonMapUrl);
+			var sunMap = new THREE.TextureLoader().load(sunMapUrl);
+			var marsMap = new THREE.TextureLoader().load(marsMapUrl);
+			var venusMap = new THREE.TextureLoader().load(venusMapUrl);
+			var mercureMap = new THREE.TextureLoader().load(mercureMapUrl);
+
+			// Now, create a Basic material; pass in the map
+			var earthMaterial = new THREE.MeshPhongMaterial({ map: earthMap });
+			var moonMaterial = new THREE.MeshPhongMaterial({ map: moonMap });
+			var sunMaterial = new THREE.MeshBasicMaterial({ map: sunMap });
+			var marsMaterial = new THREE.MeshPhongMaterial({ map: marsMap });
+			var venusMaterial = new THREE.MeshPhongMaterial({ map: venusMap });
+			var mercureMaterial = new THREE.MeshPhongMaterial({ map: mercureMap });
+
+			//Pour la géométrie nous allons dire que 10 000 km = 1 unité pour la taille des astres
+			//Pour la géométrie nous allons dire que 10 000 000 km = 1 unité pour les distances entre les astres
+
+			// Create the earth geometry
+			// Sun radius ≃ 700 000 km
+			// Sauf pour le soleil où nous réduisons sa taille par 20
+			var sunGeometry = new THREE.SphereGeometry(3.5, 32,32);
+
+			// earth radius ≃ 6 400 km
+			var earthGeometry = new THREE.SphereGeometry(0.64, 32, 32);
+
+			// moon radius ≃ 1 700 km
+			var moonGeometry = new THREE.SphereGeometry(0.17, 32, 32);
+			
+			// mars radius ≃ 3 400 km
+			var marsGeometry = new THREE.SphereGeometry(0.34, 32, 32);
+
+			// venus radius ≃ 6 000 km
+			var venusGeometry = new THREE.SphereGeometry(0.6, 32, 32);
+
+			// mercure radius ≃ 2 400 km
+			var mercureGeometry = new THREE.SphereGeometry(0.24, 32, 32);
+
+			// And put the geometry and material together into a mesh
+			earth = new THREE.Mesh(earthGeometry, earthMaterial);
+			moon = new THREE.Mesh(moonGeometry, moonMaterial);
+			sun = new THREE.Mesh(sunGeometry, sunMaterial);
+			mars = new THREE.Mesh(marsGeometry, marsMaterial);
+			venus = new THREE.Mesh(venusGeometry, venusMaterial);
+			mercure = new THREE.Mesh(mercureGeometry, mercureMaterial);
+			light = new THREE.PointLight(0xffffff, 2.5, 5000);
+
+			// Ombre par rapport à la ource de lumière du soleil
+			light.castShadow = true;
+			// On peut aussi paramétrer la qualité du calcul
+			light.shadow.mapSize.width = 512;  // default
+			light.shadow.mapSize.height = 512; // default
+			light.shadow.camera.near = 0.5;    // default
+
+			// La lune et la terre peuvent recevoir et donner des ombres aux autres objets
+			earth.castShadow = true;
+			earth.receiveShadow = true;
+			moon.castShadow = true;
+			moon.receiveShadow = true;
+			mars.castShadow = true;
+			mars.receiveShadow = true;
+
+
+			sun.position.set(0, 0, 0);
+			// Distance terre soleil ≃ 150 000 000 km
+			earth.position.set(15, 0, 0);
+			moonGroup.position.set(15, 0, 0);
+
+			// Distance terre lune ≃ 384 400 km
+			moon.position.set(3.84, 0, 0);
+
+			// TODO ajouter les deux lune de mars
+			// Distance mars soleil ≃ 227 944 000 km
+			mars.position.set(22.7944, 0, 0);
+
+			// Distance venus soleil ≃ 108 209 500 km
+			venus.position.set(10.8209, 0, 0);
+
+			// Distance mercure soleil ≃ 57 909 050 km
+			mercure.position.set(5.7909, 0, 0);
+			
+			moonGroup.add(moon);
+            earthGroup.add(earth);
+            earthGroup.add(moonGroup);
+			marsGroup.add(mars);
+			venusGroup.add(venus);
+			mercureGroup.add(mercure);
+
+            sunGroup.add(sun);
+            sunGroup.add(earthGroup);
+			sunGroup.add(marsGroup);
+			sunGroup.add(venusGroup);
+			sunGroup.add(mercureGroup);
+
+            sunGroup.add(light);
+            sunGroup.position.z = -50;
+
+			var path = "images/MilkyWay/";
+			var format = '.jpg';
+			var urls = [
+				path + 'posx' + format, path + 'negx' + format,
+				path + 'posy' + format, path + 'negy' + format,
+				path + 'posz' + format, path + 'negz' + format
+			];
+			
+			var textureCube    = new THREE.CubeTextureLoader().load( urls );
+			textureCube.format = THREE.RGBFormat;
+			solarSystemScene.background   = textureCube;
+
+            solarSystemScene.add(sunGroup);
+		}
+
+
+		// This function is called regularly to update the canvas webgl.
+		function run() {
+			// Ask to call again run 
+			requestAnimationFrame(run);
+
+			// Render the scene
+			render();
+
+			// Calls the animate function if objects or camera should move
+			animate();
+		}
+
+		// This function is called regularly to take care of the rendering.
+		function render() {
+			// Render the scene
+			// renderer.render(scene, camera);
+			renderer.render(solarSystemScene, camera);
+		}
+
+		// This function is called regularly to update objects.
+		function animate() {
+			// Computes how time has changed since last display
+			var now = Date.now();
+			var deltaTime = now - curTime;
+			curTime = now;
+			var fracTime = deltaTime / 1000; // in seconds
+			// Now we can move objects, camera, etc.
+			// Example: rotation earth
+			var angle = fracTime * Math.PI * 2;
+			// Terre
+			earthGroup.rotation.y += angle / 365; // la terre tourne en 365 jours
+			earth.rotation.y      += angle; // et en un jour sur elle-même
+			moonGroup.rotation.y  += angle / 28; // la lune tourne en 28 jours autour de la terre
+			moon.rotation.y       += angle /28; // et en 28 jours aussi sur elle-même pour faire face à la terre
+
+			// Mars
+			marsGroup.rotation.y += angle / 686; // Mars tourne en 686 jours
+			mars.rotation.y      += angle; // et en un jour sur elle-même
+
+			// Venus
+			venusGroup.rotation.y += angle / 224; // Mars tourne en 224 jours
+			venus.rotation.y      += angle / 243; // et en 243 jours sur elle-même
+
+			// Mercure
+			mercureGroup.rotation.y += angle / 88; // Mars tourne en 88 jours
+			mercure.rotation.y      += angle / 58; // et en 58 jours sur elle-même
+			
+			// Soleil
+			sun.rotation.y += angle / 26; // et en 26 jours sur elle-même
+
+			controls.update();
+			controls.target = new THREE.Vector3().setFromMatrixPosition(earth.matrixWorld);
+		}
+
+	</script>
+</head>
+
+<body>
+	<div id="info"> a first three.js example </div>
+	<canvas id="webglcanvas" style="border: none; padding-left: 0;padding-right: 0;margin-left: auto;margin-right: auto;display: block;background-color:#000000" width="600" height="500"></canvas>
+	<!-- We run the WebGL code at the end to be sure that the document is loaded.
+      -->
+	<script>
+		init(); run();
+	</script>
+</body>
+
+</html>
